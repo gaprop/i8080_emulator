@@ -30,6 +30,16 @@ impl CPU {
         }
     }
 
+    pub fn new(memory: [u8; 0x10000]) -> Self {
+        CPU {
+            regs: Registers::new(),
+            memory: Memory8080::new(memory),
+            pc: 0,
+            sp: 0xf000,
+            inte: false,
+        }
+    }
+
     fn get_m(&self) -> u8 {
         self.memory.read(self.regs.get_hl().into())
     }
@@ -125,7 +135,7 @@ impl CPU {
     fn cmp(&mut self, regm1: u8, regm2: u8) {
         let regm1: usize = regm1 as usize;
         let regm2: usize = regm2 as usize;
-        let n: usize = regm1 - regm2;
+        let n: usize = regm1.wrapping_sub(regm2);
         self.regs.update_flags_from(n, Flag::S | Flag::Z | Flag::A | Flag::P | Flag::C);
     }
     // Jump instructions
@@ -186,7 +196,9 @@ impl CPU {
 impl Device<Event> for CPU {
     fn fetch(&mut self) -> u8 {
         let op = self.memory.read(self.pc.into());
-        self.pc += 1;
+        println!("pc: {:x}", self.pc);
+        println!("op: {:x}", op);
+        self.pc = self.pc.wrapping_add(1);
         op
     }
 
@@ -818,15 +830,17 @@ impl Device<Event> for CPU {
             // IN
             0xdb => { 
                 let data = self.memory.read(self.pc.into());
-                println!("Read byte from input device: {}", data);
+                self.pc = self.pc.wrapping_add(1);
+                // println!("Read byte from input device: {}", data);
                 Event::Normal(10)
             }
 
             // OUT
             0xd3 => {
-                let data = self.memory.read(self.pc.into());
-                println!("Send byte to input device: {}", data);
-                Event::Output(data, self.regs.a, 10)
+                let port = self.memory.read(self.pc.into());
+                self.pc = self.pc.wrapping_add(1);
+                // println!("Send byte to input device: {}", port);
+                Event::Output(port, self.regs.a, 10)
             }
 
             // HLT
@@ -844,5 +858,203 @@ impl Device<Event> for CPU {
 
             // _ => panic!("Instruction not implemented: {:x}", op),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::cpu::{CPU};
+    use crate::device::{Device};
+    use crate::memory::{Memory};
+    use crate::registers::{Flag};
+
+    #[test]
+    fn test_get_m() {
+        let mut cpu = CPU::new_empty();
+        cpu.regs.set_hl(1);
+        cpu.memory.write(1, 0xff);
+        assert_eq!(cpu.get_m(), 0xff);
+    }
+
+    #[test]
+    fn test_set_m() {
+        let mut cpu = CPU::new_empty();
+        cpu.regs.set_hl(1);
+        cpu.set_m(0xff);
+        assert_eq!(cpu.memory.read(1), 0xff);
+    }
+    #[test]
+    fn test_jmp() {
+        let mut memory = [0; 0x10000];
+        memory[0] = 0xc3;
+        memory[1] = 0xff;
+        memory[2] = 0x02;
+        let mut cpu = CPU::new(memory);
+        let op = cpu.fetch();
+        cpu.exec(op);
+        assert_eq!(cpu.pc, 0x02ff);
+    }
+
+    #[test]
+    fn test_jc() {
+        let mut memory = [0; 0x10000];
+        memory[0] = 0xda;
+        memory[1] = 0xff;
+        memory[2] = 0x02;
+        let mut cpu = CPU::new(memory);
+        cpu.regs.set_flag(Flag::C, true);
+        let op = cpu.fetch();
+        cpu.exec(op);
+        assert_eq!(cpu.pc, 0x02ff);
+    }
+
+    #[test]
+    fn test_jnc_no_jump() {
+        let mut memory = [0; 0x10000];
+        memory[0] = 0xd2;
+        memory[1] = 0xff;
+        memory[2] = 0x02;
+        let mut cpu = CPU::new(memory);
+        cpu.regs.set_flag(Flag::C, true);
+        let op = cpu.fetch();
+        cpu.exec(op);
+        assert_eq!(cpu.pc, 0x03);
+    }
+
+    #[test]
+    fn test_jz_no_jump() {
+        let mut memory = [0; 0x10000];
+        memory[0] = 0xca;
+        memory[1] = 0xff;
+        memory[2] = 0x02;
+        let mut cpu = CPU::new(memory);
+        cpu.regs.set_flag(Flag::Z, false);
+        let op = cpu.fetch();
+        cpu.exec(op);
+        assert_eq!(cpu.pc, 0x03);
+    }
+
+    #[test]
+    fn test_jnz() {
+        let mut memory = [0; 0x10000];
+        memory[0] = 0xc2;
+        memory[1] = 0xff;
+        memory[2] = 0x02;
+        let mut cpu = CPU::new(memory);
+        cpu.regs.set_flag(Flag::Z, false);
+        let op = cpu.fetch();
+        cpu.exec(op);
+        assert_eq!(cpu.pc, 0x02ff);
+    }
+
+    #[test]
+    fn test_jp() {
+        let mut memory = [0; 0x10000];
+        memory[0] = 0xf2;
+        memory[1] = 0xff;
+        memory[2] = 0x02;
+        let mut cpu = CPU::new(memory);
+        cpu.regs.set_flag(Flag::S, false);
+        let op = cpu.fetch();
+        cpu.exec(op);
+        assert_eq!(cpu.pc, 0x02ff);
+    }
+
+    #[test]
+    fn test_jm() {
+        let mut memory = [0; 0x10000];
+        memory[0] = 0xfa;
+        memory[1] = 0xff;
+        memory[2] = 0x02;
+        let mut cpu = CPU::new(memory);
+        cpu.regs.set_flag(Flag::S, true);
+        let op = cpu.fetch();
+        cpu.exec(op);
+        assert_eq!(cpu.pc, 0x02ff);
+    }
+
+    #[test]
+    fn test_jpe() {
+        let mut memory = [0; 0x10000];
+        memory[0] = 0xea;
+        memory[1] = 0xff;
+        memory[2] = 0x02;
+        let mut cpu = CPU::new(memory);
+        cpu.regs.set_flag(Flag::P, true);
+        let op = cpu.fetch();
+        cpu.exec(op);
+        assert_eq!(cpu.pc, 0x02ff);
+    }
+
+    #[test]
+    fn test_jpo() {
+        let mut memory = [0; 0x10000];
+        memory[0] = 0xe2;
+        memory[1] = 0xff;
+        memory[2] = 0x02;
+        let mut cpu = CPU::new(memory);
+        cpu.regs.set_flag(Flag::P, false);
+        let op = cpu.fetch();
+        cpu.exec(op);
+        assert_eq!(cpu.pc, 0x02ff);
+    }
+
+    #[test]
+    fn test_call() {
+        let mut memory = [0x00; 0x10000];
+        memory[0] = 0xcd;
+        memory[1] = 0xff;
+        memory[2] = 0x02;
+        let mut cpu = CPU::new(memory);
+        let op = cpu.fetch();
+        cpu.exec(op);
+        assert_eq!(cpu.pc, 0x02ff);
+        assert_eq!(cpu.sp, 0xeffe);
+        assert_eq!(cpu.memory.read16(0xeffe), 0x03);
+    }
+
+    #[test]
+    fn test_cc() {
+        let mut memory = [0x00; 0x10000];
+        memory[0] = 0xdc;
+        memory[1] = 0xff;
+        memory[2] = 0x02;
+        let mut cpu = CPU::new(memory);
+        cpu.regs.set_flag(Flag::C, true);
+        let op = cpu.fetch();
+        cpu.exec(op);
+        assert_eq!(cpu.pc, 0x02ff);
+        assert_eq!(cpu.sp, 0xeffe);
+        assert_eq!(cpu.memory.read16(0xeffe), 0x03);
+    }
+
+    #[test]
+    fn test_cnc_no_jump() {
+        let mut memory = [0x00; 0x10000];
+        memory[0] = 0xcd;
+        memory[1] = 0xff;
+        memory[2] = 0x02;
+        let mut cpu = CPU::new(memory);
+        cpu.regs.set_flag(Flag::C, true);
+        let op = cpu.fetch();
+        cpu.exec(op);
+        assert_eq!(cpu.pc, 0x02ff);
+        assert_eq!(cpu.sp, 0xeffe);
+        assert_eq!(cpu.memory.read16(0xeffe), 0x03);
+    }
+
+    #[test]
+    fn test_ret() {
+        let mut memory = [0x00; 0x10000];
+        memory[0] = 0xcd;
+        memory[1] = 0xff;
+        memory[2] = 0x02;
+        let mut cpu = CPU::new(memory);
+        cpu.regs.set_flag(Flag::C, true);
+        let op = cpu.fetch();
+        cpu.exec(op);
+        assert_eq!(cpu.pc, 0x02ff);
+        assert_eq!(cpu.sp, 0xeffe);
+        assert_eq!(cpu.memory.read16(0xeffe), 0x03);
     }
 }

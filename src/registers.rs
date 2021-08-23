@@ -78,7 +78,7 @@ impl BitOr<Flag> for u8 {
     type Output = u8;
 
     fn bitor(self, rhs: Flag) -> u8 {
-        let lhs = 1 << self;
+        let lhs = self;
         let rhs = 1 << (rhs as u8);
         lhs | rhs
     }
@@ -183,5 +183,10 @@ mod tests {
         let v: usize = 0x122;
         regs.update_flags_from(v, Flag::C | Flag::A);
         assert_eq!(regs.f, 0b0001_0011);
+    }
+
+    #[test]
+    fn bitor_flags() {
+        assert_eq!(Flag::S | Flag::Z | Flag::A, 208);
     }
 }

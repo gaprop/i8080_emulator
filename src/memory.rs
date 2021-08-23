@@ -7,7 +7,7 @@ pub trait Memory {
 }
 
 pub struct Memory8080 {
-    memory: [u8; 65536]
+    memory: [u8; 0x10000]
 }
 
 impl Memory for Memory8080 {
@@ -41,6 +41,12 @@ impl Memory8080 {
             memory: [0; 65536]
         }
     }
+
+    pub fn new(memory: [u8; 65536]) -> Self {
+        Memory8080 {
+            memory
+        }
+    }
 }
 
 #[cfg(test)]
@@ -67,14 +73,14 @@ mod tests {
         let mut memory = Memory8080::new_empty();
         memory.memory[0] = 0xff;
         memory.memory[1] = 0x02;
-        assert_eq!(memory.read16(0), 0xff02);
+        assert_eq!(memory.read16(0), 0x02ff);
     }
 
     #[test]
     fn write16() {
         let mut memory = Memory8080::new_empty();
         memory.write16(4, 0xff02);
-        assert_eq!(memory.memory[4], 0xff);
-        assert_eq!(memory.memory[5], 0x02);
+        assert_eq!(memory.memory[5], 0xff);
+        assert_eq!(memory.memory[4], 0x02);
     }
 }
