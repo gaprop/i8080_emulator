@@ -1,6 +1,7 @@
 use crate::memory::{Memory, Memory8080};
 use crate::registers::{Registers, Flag};
 use crate::device::Device;
+use crate::disassembler::{Disassembler};
 
 type ClockCycles = u8;
 type Port = u8;
@@ -17,6 +18,7 @@ pub struct CPU {
     pub pc: u16,
     sp: u16,
     inte: bool,
+    disassembler: Disassembler,
 }
 
 impl CPU {
@@ -27,6 +29,7 @@ impl CPU {
             pc: 0,
             sp: 0xf000,
             inte: false,
+            disassembler: Disassembler::new(),
         }
     }
 
@@ -37,6 +40,7 @@ impl CPU {
             pc: 0,
             sp: 0xf000,
             inte: false,
+            disassembler: Disassembler::new(),
         }
     }
 
@@ -150,9 +154,7 @@ impl CPU {
 
     fn call(&mut self, cond: bool) -> Event {
         if cond {
-            self.memory.write16(self.sp.wrapping_sub(2).into(), 
-                                self.pc.wrapping_add(2));
-            self.sp = self.sp.wrapping_sub(2);
+            self.push(self.pc.wrapping_add(2));
 
             let addr = self.memory.read16(self.pc.into());
             self.pc = addr;
@@ -165,9 +167,7 @@ impl CPU {
 
     fn ret(&mut self, cond: bool) -> Event {
         if cond {
-            let addr = self.memory.read16(self.sp.into());
-            self.sp = self.sp.wrapping_add(2);
-            self.pc = addr;
+            self.pc = self.pop();
 
             Event::Normal(11)
         } else {
@@ -177,7 +177,7 @@ impl CPU {
 
     fn push(&mut self, data: u16) {
         self.sp = self.sp.wrapping_sub(2);
-        self.memory.write16(data.into(), self.sp);
+        self.memory.write16(self.sp.into(), data);
     }
 
     fn pop(&mut self) -> u16 {
@@ -196,8 +196,21 @@ impl CPU {
 impl Device<Event> for CPU {
     fn fetch(&mut self) -> u8 {
         let op = self.memory.read(self.pc.into());
-        println!("pc: {:x}", self.pc);
-        println!("op: {:x}", op);
+        let code = self.disassembler.disassemble(&self.memory, &self.pc, &op, &self.regs.get_hl());
+        println!("{}     pc: {:x}, sp: {:x}, a: {:x}, b: {:x}, c: {:x}, d: {:x}, e: {:x}, h: {:x}, l: {:x}, f: {:x}", 
+                 code,
+                 self.pc,
+                 self.sp,
+                 self.regs.a,
+                 self.regs.b,
+                 self.regs.c,
+                 self.regs.d,
+                 self.regs.e,
+                 self.regs.h,
+                 self.regs.l,
+                 self.regs.f);
+        // println!("pc: {:x}", self.pc);
+        // println!("op: {:x}", op);
         self.pc = self.pc.wrapping_add(1);
         op
     }
@@ -366,63 +379,63 @@ impl Device<Event> for CPU {
 
             // ADI
             0xc6 => { 
-                let data = self.memory.read(self.pc.wrapping_add(1).into());
+                let data = self.memory.read(self.pc.into());
                 self.pc = self.pc.wrapping_add(1);
-                self.add(self.regs.a, data);
+                self.regs.a = self.add(self.regs.a, data);
                 Event::Normal(7)
             }
 
             // ACI
             0xce => { 
-                let data = self.memory.read(self.pc.wrapping_add(1).into());
+                let data = self.memory.read(self.pc.into());
                 self.pc = self.pc.wrapping_add(1);
-                self.adc(self.regs.a, data);
+                self.regs.a = self.adc(self.regs.a, data);
                 Event::Normal(7)
             }
 
             // SUI
             0xd6 => { 
-                let data = self.memory.read(self.pc.wrapping_add(1).into());
+                let data = self.memory.read(self.pc.into());
                 self.pc = self.pc.wrapping_add(1);
-                self.sub(self.regs.a, data);
+                self.regs.a = self.sub(self.regs.a, data);
                 Event::Normal(7)
             }
 
             // SBI
             0xde => { 
-                let data = self.memory.read(self.pc.wrapping_add(1).into());
+                let data = self.memory.read(self.pc.into());
                 self.pc = self.pc.wrapping_add(1);
-                self.sbb(self.regs.a, data);
+                self.regs.a = self.sbb(self.regs.a, data);
                 Event::Normal(7)
             }
 
             // ANI
             0xe6 => {
-                let data = self.memory.read(self.pc.wrapping_add(1).into());
+                let data = self.memory.read(self.pc.into());
                 self.pc = self.pc.wrapping_add(1);
-                self.ana(self.regs.a, data);
+                self.regs.a = self.ana(self.regs.a, data);
                 Event::Normal(7)
             }
 
             // XRI
             0xee => {
-                let data = self.memory.read(self.pc.wrapping_add(1).into());
+                let data = self.memory.read(self.pc.into());
                 self.pc = self.pc.wrapping_add(1);
-                self.xra(self.regs.a, data);
+                self.regs.a = self.xra(self.regs.a, data);
                 Event::Normal(7)
             }
 
             // ORI
             0xf6 => {
-                let data = self.memory.read(self.pc.wrapping_add(1).into());
+                let data = self.memory.read(self.pc.into());
                 self.pc = self.pc.wrapping_add(1);
-                self.ora(self.regs.a, data);
+                self.regs.a = self.ora(self.regs.a, data);
                 Event::Normal(7)
             }
 
             // CPI
             0xfe => {
-                let data = self.memory.read(self.pc.wrapping_add(1).into());
+                let data = self.memory.read(self.pc.into());
                 self.pc = self.pc.wrapping_add(1);
                 self.cmp(self.regs.a, data);
                 Event::Normal(7)
@@ -611,49 +624,49 @@ impl Device<Event> for CPU {
 
             // MVI
             0x06 => {
-                let data = self.memory.read(self.pc.wrapping_add(1).into());
+                let data = self.memory.read(self.pc.into());
                 self.pc = self.pc.wrapping_add(1);
                 self.regs.b = data;
                 Event::Normal(7)
             }
             0x0e => {
-                let data = self.memory.read(self.pc.wrapping_add(1).into());
+                let data = self.memory.read(self.pc.into());
                 self.pc = self.pc.wrapping_add(1);
                 self.regs.c = data;
                 Event::Normal(7)
             }
             0x16 => {
-                let data = self.memory.read(self.pc.wrapping_add(1).into());
+                let data = self.memory.read(self.pc.into());
                 self.pc = self.pc.wrapping_add(1);
                 self.regs.d = data;
                 Event::Normal(7)
             }
             0x1e => {
-                let data = self.memory.read(self.pc.wrapping_add(1).into());
+                let data = self.memory.read(self.pc.into());
                 self.pc = self.pc.wrapping_add(1);
                 self.regs.e = data;
                 Event::Normal(7)
             }
             0x26 => {
-                let data = self.memory.read(self.pc.wrapping_add(1).into());
+                let data = self.memory.read(self.pc.into());
                 self.pc = self.pc.wrapping_add(1);
                 self.regs.h = data;
                 Event::Normal(7)
             }
             0x2e => {
-                let data = self.memory.read(self.pc.wrapping_add(1).into());
+                let data = self.memory.read(self.pc.into());
                 self.pc = self.pc.wrapping_add(1);
                 self.regs.l = data;
                 Event::Normal(7)
             }
             0x36 => {
-                let data = self.memory.read(self.pc.wrapping_add(1).into());
+                let data = self.memory.read(self.pc.into());
                 self.pc = self.pc.wrapping_add(1);
                 self.set_m(data);
                 Event::Normal(10)
             }
             0x3e => {
-                let data = self.memory.read(self.pc.wrapping_add(1).into());
+                let data = self.memory.read(self.pc.into());
                 self.pc = self.pc.wrapping_add(1);
                 self.regs.a = data;
                 Event::Normal(7)
@@ -679,12 +692,12 @@ impl Device<Event> for CPU {
             // LDAX
             0x0a => {
                 let addr = self.regs.get_bc();
-                self.memory.write(addr.into(), self.regs.a);
+                self.regs.a = self.memory.read(addr.into());
                 Event::Normal(7)
             }
             0x1a => {
                 let addr = self.regs.get_de();
-                self.memory.write(addr.into(), self.regs.a);
+                self.regs.a = self.memory.read(addr.into());
                 Event::Normal(7)
             }
 
@@ -698,7 +711,7 @@ impl Device<Event> for CPU {
             // LDA
             0x3a => {
                 let addr = self.memory.read16(self.pc.into());
-                self.memory.write(addr.into(), self.regs.a);
+                self.regs.a = self.memory.read(addr.into());
                 Event::Normal(13)
             }
 
@@ -1056,5 +1069,114 @@ mod tests {
         assert_eq!(cpu.pc, 0x02ff);
         assert_eq!(cpu.sp, 0xeffe);
         assert_eq!(cpu.memory.read16(0xeffe), 0x03);
+    }
+
+    #[test]
+    fn test_lxi() {
+        let mut memory = [0x00; 0x10000];
+        memory[0] = 0x21;
+        memory[1] = 0x02;
+        memory[2] = 0xff;
+        let mut cpu = CPU::new(memory);
+        let op = cpu.fetch();
+        cpu.exec(op);
+        assert_eq!(cpu.regs.get_hl(), 0xff02);
+    }
+
+    #[test]
+    fn test_push() {
+        let mut memory = [0x00; 0x10000];
+        memory[0] = 0xd5;
+        let mut cpu = CPU::new(memory);
+        cpu.regs.set_de(0xff02);
+        let op = cpu.fetch();
+        cpu.exec(op);
+        assert_eq!(cpu.memory.read16(0xf000 - 2), 0xff02);
+    }
+
+    #[test]
+    fn test_pop() {
+        let mut memory = [0x00; 0x10000];
+        memory[0x00] = 0xd1;
+        memory[0xf000 - 2] = 0xff;
+        memory[0xf000 - 1] = 0x02;
+        let mut cpu = CPU::new(memory);
+        cpu.sp -= 2;
+        let op = cpu.fetch();
+        cpu.exec(op);
+        assert_eq!(cpu.regs.get_de(), 0x02ff);
+    }
+
+    #[test]
+    fn test_xchg() {
+        let mut memory = [0x00; 0x10000];
+        memory[0] = 0xeb;
+        let mut cpu = CPU::new(memory);
+        cpu.regs.set_de(0xff02);
+        cpu.regs.set_hl(0x1001);
+        let op = cpu.fetch();
+        cpu.exec(op);
+        assert_eq!(cpu.regs.get_hl(), 0xff02);
+        assert_eq!(cpu.regs.get_de(), 0x1001);
+    }
+
+    #[test]
+    fn test_mvi() {
+        let mut memory = [0x00; 0x10000];
+        memory[0] = 0x0e;
+        memory[1] = 0xff;
+        let mut cpu = CPU::new(memory);
+        let op = cpu.fetch();
+        cpu.exec(op);
+        assert_eq!(cpu.regs.c, 0xff);
+    }
+
+    #[test]
+    fn test_ani() {
+        let mut memory = [0x00; 0x10000];
+        memory[0] = 0xe6;
+        memory[1] = 0x00;
+        let mut cpu = CPU::new(memory);
+        cpu.regs.a = 0xff;
+        let op = cpu.fetch();
+        cpu.exec(op);
+        assert_eq!(cpu.regs.a, 0x00);
+    }
+
+    #[test]
+    fn test_adi() {
+        let mut memory = [0x00; 0x10000];
+        memory[0] = 0xc6;
+        memory[1] = 0x01;
+        let mut cpu = CPU::new(memory);
+        cpu.regs.a = 0xfe;
+        let op = cpu.fetch();
+        cpu.exec(op);
+        assert_eq!(cpu.regs.a, 0xff);
+    }
+
+    #[test]
+    fn test_cpi() {
+        let mut memory = [0x00; 0x10000];
+        memory[0] = 0xfe;
+        memory[1] = 0x02;
+        let mut cpu = CPU::new(memory);
+        cpu.regs.a = 0x01;
+        let op = cpu.fetch();
+        cpu.exec(op);
+        assert_eq!(cpu.regs.f, 0x97);
+    }
+
+    #[test]
+    fn test_lda() {
+        let mut memory = [0x00; 0x10000];
+        memory[0] = 0x3a;
+        memory[1] = 0x02;
+        memory[2] = 0xff;
+        memory[0xff02] = 0xff;
+        let mut cpu = CPU::new(memory);
+        let op = cpu.fetch();
+        cpu.exec(op);
+        assert_eq!(cpu.regs.a, 0xff);
     }
 }

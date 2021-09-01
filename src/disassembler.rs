@@ -1,20 +1,54 @@
 use std::collections::HashMap;
+use crate::memory::{Memory};
 
+#[derive(Debug)]
 enum Opcode {
     SingleOpcode(&'static str),
     Immediate8(&'static str),
     Immediate16(&'static str),
-    FromAdress(&'static str),
     DirectAdress(&'static str),
-    DirectAdressSwitched(&'static str, &'static str),
-    ImmDirectAdress(&'static str),
+
+    RegPairFirstOperand(&'static str, &'static str),
+    RegPairSecOperand(&'static str),
+    RegPairAndImm(&'static str),
 }
 
-struct Disassembler {
+pub struct Disassembler {
     ins: HashMap<u8, Opcode>
 }
 
 impl Disassembler {
+    pub fn disassemble(&self, memory: &impl Memory, pc: &u16, op: &u8, rp: &u16) -> String {
+        let code = self.ins.get(op);
+        match code {
+            Some(Opcode::SingleOpcode(n)) => {
+                format!("{:x}    {}", pc, n)
+            }
+            Some(Opcode::Immediate8(n)) => {
+                let imm8 = memory.read((pc + 1).into());
+                format!("{:x}    {} 0x{:x}", pc, n, imm8)
+            }
+            Some(Opcode::Immediate16(n)) => {
+                let imm16 = memory.read16((pc + 1).into());
+                format!("{:x}    {} 0x{:x}", pc, n, imm16)
+            }
+            Some(Opcode::DirectAdress(n)) => {
+                let imm16 = memory.read16((pc + 1).into());
+                format!("{:x}    {} $(0x{:x})", pc, n, imm16)
+            }
+            Some(Opcode::RegPairFirstOperand(n1, n2)) => {
+                format!("{:x}    {} $(0x{:x}), {}", pc, n1, rp, n2)
+            }
+            Some(Opcode::RegPairSecOperand(n)) => {
+                format!("{:x}    {} $(0x{:x})", pc, n, rp)
+            }
+            Some(Opcode::RegPairAndImm(n)) => {
+                let imm8 = memory.read((pc + 1).into());
+                format!("{:x}    {} $(0x{:x}), 0x{:x}", pc, n, rp, imm8)
+            }
+            n => panic!("Could not disassemble: {:#?}", n),
+        }
+    }
     pub fn new() -> Self {
         let opcodes = vec![
             (0x00, Opcode::SingleOpcode("NOP")),
@@ -86,6 +120,7 @@ impl Disassembler {
             (0xe7, Opcode::SingleOpcode("RST 4")),
             (0xef, Opcode::SingleOpcode("RST 5")),
             (0xf7, Opcode::SingleOpcode("RST 6")),
+            (0xff, Opcode::SingleOpcode("RST 7")),
               
             // Is this a double register?
             (0x02, Opcode::SingleOpcode("STAX B")),
@@ -106,7 +141,7 @@ impl Disassembler {
             (0x04, Opcode::SingleOpcode("INR B")),
             (0x14, Opcode::SingleOpcode("INR D")),
             (0x24, Opcode::SingleOpcode("INR H")),
-            (0x34, Opcode::DirectAdress("INR")),
+            (0x34, Opcode::RegPairSecOperand("INR")),
             (0x0c, Opcode::SingleOpcode("INR C")),
             (0x1c, Opcode::SingleOpcode("INR E")),
             (0x2c, Opcode::SingleOpcode("INR L")),
@@ -116,7 +151,7 @@ impl Disassembler {
             (0x05, Opcode::SingleOpcode("DCR B")),
             (0x15, Opcode::SingleOpcode("DCR D")),
             (0x25, Opcode::SingleOpcode("DCR H")),
-            (0x35, Opcode::DirectAdress("DCR")),
+            (0x35, Opcode::RegPairSecOperand("DCR")),
             (0x0d, Opcode::SingleOpcode("DCR C")),
             (0x1d, Opcode::SingleOpcode("DCR E")),
             (0x2d, Opcode::SingleOpcode("DCR L")),
@@ -139,49 +174,49 @@ impl Disassembler {
             (0x3b, Opcode::SingleOpcode("DCX SP")),
 
             // Is this a double register?
-            (0x01, Opcode::Immediate16("LXI B")),
-            (0x11, Opcode::Immediate16("LXI D")),
-            (0x21, Opcode::Immediate16("LXI H")),
+            (0x01, Opcode::Immediate16("LXI BC")),
+            (0x11, Opcode::Immediate16("LXI DE")),
+            (0x21, Opcode::Immediate16("LXI HL")),
             (0x31, Opcode::Immediate16("LXI SP")),
 
             (0x40, Opcode::SingleOpcode("MOV B, B")),
             (0x50, Opcode::SingleOpcode("MOV D, B")),
             (0x60, Opcode::SingleOpcode("MOV H, B")),
-            (0x70, Opcode::DirectAdressSwitched("MOV", "B")),
+            (0x70, Opcode::RegPairFirstOperand("MOV", "B")),
 
             (0x41, Opcode::SingleOpcode("MOV B, C")),
             (0x51, Opcode::SingleOpcode("MOV D, C")),
             (0x61, Opcode::SingleOpcode("MOV H, C")),
-            (0x71, Opcode::DirectAdressSwitched("MOV", "C")),
+            (0x71, Opcode::RegPairFirstOperand("MOV", "C")),
 
             (0x42, Opcode::SingleOpcode("MOV B, D")),
             (0x52, Opcode::SingleOpcode("MOV D, D")),
             (0x62, Opcode::SingleOpcode("MOV H, D")),
-            (0x72, Opcode::DirectAdressSwitched("MOV", "D")),
+            (0x72, Opcode::RegPairFirstOperand("MOV", "D")),
 
             (0x43, Opcode::SingleOpcode("MOV B, E")),
             (0x53, Opcode::SingleOpcode("MOV D, E")),
             (0x63, Opcode::SingleOpcode("MOV H, E")),
-            (0x73, Opcode::DirectAdressSwitched("MOV", "E")),
+            (0x73, Opcode::RegPairFirstOperand("MOV", "E")),
 
             (0x44, Opcode::SingleOpcode("MOV B, H")),
             (0x54, Opcode::SingleOpcode("MOV D, H")),
             (0x64, Opcode::SingleOpcode("MOV H, H")),
-            (0x74, Opcode::DirectAdressSwitched("MOV", "H")),
+            (0x74, Opcode::RegPairFirstOperand("MOV", "H")),
 
             (0x45, Opcode::SingleOpcode("MOV B, L")),
             (0x55, Opcode::SingleOpcode("MOV D, L")),
             (0x65, Opcode::SingleOpcode("MOV H, L")),
-            (0x75, Opcode::DirectAdressSwitched("MOV", "L")),
 
-            (0x46, Opcode::DirectAdress("MOV B")),
-            (0x56, Opcode::DirectAdress("MOV D")),
-            (0x66, Opcode::DirectAdress("MOV H")),
+            (0x46, Opcode::RegPairSecOperand("MOV C")),
+            (0x56, Opcode::RegPairSecOperand("MOV E")),
+            (0x66, Opcode::RegPairSecOperand("MOV L")),
+            (0x76, Opcode::RegPairSecOperand("MOV A")),
 
             (0x47, Opcode::SingleOpcode("MOV B, A")),
             (0x57, Opcode::SingleOpcode("MOV D, A")),
             (0x67, Opcode::SingleOpcode("MOV H, A")),
-            (0x77, Opcode::DirectAdressSwitched("MOV", "A")),
+            (0x77, Opcode::RegPairFirstOperand("MOV", "A")),
 
             (0x48, Opcode::SingleOpcode("MOV C, B")),
             (0x58, Opcode::SingleOpcode("MOV E, B")),
@@ -229,7 +264,7 @@ impl Disassembler {
             (0x1e, Opcode::Immediate8("MVI E")),
             (0x26, Opcode::Immediate8("MVI H")),
             (0x2e, Opcode::Immediate8("MVI L")),
-            // (0x36, Opcode::ImmDirectAdress("MVI L")),
+            (0x36, Opcode::RegPairAndImm("MVI")),
             (0x3e, Opcode::Immediate8("MVI A")),
 
 
@@ -240,7 +275,7 @@ impl Disassembler {
             (0x83, Opcode::SingleOpcode("ADD E")),
             (0x84, Opcode::SingleOpcode("ADD H")),
             (0x85, Opcode::SingleOpcode("ADD L")),
-            (0x86, Opcode::DirectAdress("ADD")),
+            (0x86, Opcode::RegPairSecOperand("ADD")),
             (0x87, Opcode::SingleOpcode("ADD A")),
 
             (0xc6, Opcode::Immediate8("ADI")),
@@ -251,7 +286,7 @@ impl Disassembler {
             (0x8b, Opcode::SingleOpcode("ADC E")),
             (0x8c, Opcode::SingleOpcode("ADC H")),
             (0x8d, Opcode::SingleOpcode("ADC L")),
-            (0x8e, Opcode::DirectAdress("ADC")),
+            (0x8e, Opcode::RegPairSecOperand("ADC")),
             (0x8f, Opcode::SingleOpcode("ADC A")),
 
             (0xce, Opcode::Immediate8("ACI")),
@@ -262,7 +297,7 @@ impl Disassembler {
             (0x93, Opcode::SingleOpcode("SUB E")),
             (0x94, Opcode::SingleOpcode("SUB H")),
             (0x95, Opcode::SingleOpcode("SUB L")),
-            (0x96, Opcode::DirectAdress("SUB")),
+            (0x96, Opcode::RegPairSecOperand("SUB")),
             (0x97, Opcode::SingleOpcode("SUB A")),
 
             (0xd6, Opcode::Immediate8("SUI")),
@@ -273,7 +308,7 @@ impl Disassembler {
             (0x9b, Opcode::SingleOpcode("SBB E")),
             (0x9c, Opcode::SingleOpcode("SBB H")),
             (0x9d, Opcode::SingleOpcode("SBB L")),
-            (0x9e, Opcode::DirectAdress("SBB")),
+            (0x9e, Opcode::RegPairSecOperand("SBB")),
             (0x9f, Opcode::SingleOpcode("SBB A")),
 
             (0xde, Opcode::Immediate8("SBI")),
@@ -284,7 +319,7 @@ impl Disassembler {
             (0xa3, Opcode::SingleOpcode("ANA E")),
             (0xa4, Opcode::SingleOpcode("ANA H")),
             (0xa5, Opcode::SingleOpcode("ANA L")),
-            (0xa6, Opcode::DirectAdress("ANA")),
+            (0xa6, Opcode::RegPairSecOperand("ANA")),
             (0xa7, Opcode::SingleOpcode("ANA A")),
 
             (0xe6, Opcode::Immediate8("ANI")),
@@ -295,7 +330,7 @@ impl Disassembler {
             (0xab, Opcode::SingleOpcode("XRA E")),
             (0xac, Opcode::SingleOpcode("XRA H")),
             (0xad, Opcode::SingleOpcode("XRA L")),
-            (0xae, Opcode::DirectAdress("XRA")),
+            (0xae, Opcode::RegPairSecOperand("XRA")),
             (0xaf, Opcode::SingleOpcode("XRA A")),
 
             (0xee, Opcode::Immediate8("XRI")),
@@ -306,7 +341,7 @@ impl Disassembler {
             (0xb3, Opcode::SingleOpcode("ORA E")),
             (0xb4, Opcode::SingleOpcode("ORA H")),
             (0xb5, Opcode::SingleOpcode("ORA L")),
-            (0xb6, Opcode::DirectAdress("ORA")),
+            (0xb6, Opcode::RegPairSecOperand("ORA")),
             (0xb7, Opcode::SingleOpcode("ORA A")),
 
             (0xf6, Opcode::Immediate8("ORI")),
@@ -317,19 +352,19 @@ impl Disassembler {
             (0xbb, Opcode::SingleOpcode("CMP E")),
             (0xbc, Opcode::SingleOpcode("CMP H")),
             (0xbd, Opcode::SingleOpcode("CMP L")),
-            (0xbe, Opcode::DirectAdress("CMP")),
+            (0xbe, Opcode::RegPairSecOperand("CMP")),
             (0xbf, Opcode::SingleOpcode("CMP A")),
 
             (0xfe, Opcode::Immediate8("CPI")),
 
-            (0xc1, Opcode::SingleOpcode("POP B")),
-            (0xd1, Opcode::SingleOpcode("POP D")),
-            (0xe1, Opcode::SingleOpcode("POP H")),
+            (0xc1, Opcode::SingleOpcode("POP BC")),
+            (0xd1, Opcode::SingleOpcode("POP DE")),
+            (0xe1, Opcode::SingleOpcode("POP HL")),
             (0xf1, Opcode::SingleOpcode("POP PSW")),
 
-            (0xc5, Opcode::SingleOpcode("PUSH B")),
-            (0xd5, Opcode::SingleOpcode("PUSH D")),
-            (0xe5, Opcode::SingleOpcode("PUSH H")),
+            (0xc5, Opcode::SingleOpcode("PUSH BC")),
+            (0xd5, Opcode::SingleOpcode("PUSH DE")),
+            (0xe5, Opcode::SingleOpcode("PUSH HL")),
             (0xf5, Opcode::SingleOpcode("PUSH PSW")),
 
             (0xd3, Opcode::Immediate8("OUT")),

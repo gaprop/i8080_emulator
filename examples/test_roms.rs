@@ -46,13 +46,12 @@ impl Machine<Event> for Machine8080Test {
                     let operation = self.cpu.regs.c;
 
                     if operation == 2 {
-                        print!("{}", self.cpu.regs.e as char);
+                        print!("{}", (self.cpu.regs.e) as char);
                     } else if operation == 9 {
                         let mut addr = self.cpu.regs.get_de();
-                        print!("{}", self.cpu.memory.read((addr as usize) + 1));
                         while (self.cpu.memory.read(addr.into()) as char) != '$' {
+                            print!("{}", self.cpu.memory.read(addr.into()) as char);
                             addr += 1;
-                            print!("{}", self.cpu.memory.read(addr.into()));
                         }
                     }
                 }
@@ -85,5 +84,6 @@ fn main() {
     memory[0x0007] = 0xc9;
 
     let mut machine = Machine8080Test::new(memory);
+    println!("*********************");
     machine.run();
 }
