@@ -132,9 +132,9 @@ impl Disassembler {
             (0x3a, Opcode::DirectAdress("LDA")),
 
             // Is this a double register?
-            (0x03, Opcode::SingleOpcode("INX B")),
-            (0x13, Opcode::SingleOpcode("INX D")),
-            (0x23, Opcode::SingleOpcode("INX H")),
+            (0x03, Opcode::SingleOpcode("INX BC")),
+            (0x13, Opcode::SingleOpcode("INX DE")),
+            (0x23, Opcode::SingleOpcode("INX HL")),
             (0x33, Opcode::SingleOpcode("INX SP")),
 
             // Is this a double register?
