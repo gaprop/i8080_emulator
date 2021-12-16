@@ -36,28 +36,44 @@ impl Machine<Event> for Machine8080Test {
         let op = self.cpu.fetch();
         let event = self.cpu.exec(op);
 
-        match event {
-            Event::Output(port, _, _) => {
-                if port == 0 {
-                    self.test_finished = true;
-                }
+        if self.cpu.pc == 0x05 {
+            let operation = self.cpu.regs.c;
 
-                if port == 1 {
-                    let operation = self.cpu.regs.c;
-
-                    if operation == 2 {
-                        print!("{}", (self.cpu.regs.e) as char);
-                    } else if operation == 9 {
-                        let mut addr = self.cpu.regs.get_de();
-                        while (self.cpu.memory.read(addr.into()) as char) != '$' {
-                            print!("{}", self.cpu.memory.read(addr.into()) as char);
-                            addr += 1;
-                        }
-                    }
+            if operation == 2 {
+                print!("{}", (self.cpu.regs.e) as char);
+            } else if operation == 9 {
+                let mut addr = self.cpu.regs.get_de();
+                while (self.cpu.memory.read(addr.into()) as char) != '$' {
+                    print!("{}", self.cpu.memory.read(addr.into()) as char);
+                    addr += 1;
                 }
             }
-            _ => (),
         }
+        if self.cpu.pc == 0x00 {
+            self.test_finished = true;
+        }
+        // match event {
+            // Event::Output(port, _, _) => {
+                // if port == 0 {
+                    // self.test_finished = true;
+                // }
+
+                // if port == 1 {
+                    // let operation = self.cpu.regs.c;
+
+                    // if operation == 2 {
+                        // print!("{}", (self.cpu.regs.e) as char);
+                    // } else if operation == 9 {
+                        // let mut addr = self.cpu.regs.get_de();
+                        // while (self.cpu.memory.read(addr.into()) as char) != '$' {
+                            // print!("{}", self.cpu.memory.read(addr.into()) as char);
+                            // addr += 1;
+                        // }
+                    // }
+                // }
+            // }
+            // _ => (),
+        // }
     }
 
     fn run(&mut self) {
@@ -76,12 +92,12 @@ fn main() {
     let filename = env::args().nth(1).expect("Needs a file");
     let mut memory = [0; 0x10000];
     read_file_into_buffer(filename, &mut memory, 0x100);
-    memory[0x0000] = 0xd3;
-    memory[0x0001] = 0x00;
+    // memory[0x0000] = 0xd3;
+    // memory[0x0001] = 0x00;
 
-    memory[0x0005] = 0xd3;
-    memory[0x0006] = 0x01;
-    memory[0x0007] = 0xc9;
+    memory[0x0005] = 0xc9;
+    // memory[0x0006] = 0x01;
+    // memory[0x0007] = 0xc9;
 
     let mut machine = Machine8080Test::new(memory);
     println!("*********************");

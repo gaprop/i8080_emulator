@@ -27,7 +27,7 @@ impl CPU {
             regs: Registers::new(),
             memory: Memory8080::new_empty(),
             pc: 0,
-            sp: 0xf000,
+            sp: 0x0000, // 0xf000,
             inte: false,
             disassembler: Disassembler::new(),
         }
@@ -38,7 +38,7 @@ impl CPU {
             regs: Registers::new(),
             memory: Memory8080::new(memory),
             pc: 0,
-            sp: 0xf000,
+            sp: 0x0000, // 0xf000,
             inte: false,
             disassembler: Disassembler::new(),
         }
@@ -61,87 +61,116 @@ impl CPU {
     }
 
     // Arithmetic instructions
-    fn inr(&mut self, mut regm: u8) -> u8 {
-        let mut n: usize = regm as usize;
-        n = n.wrapping_add(1);
-        regm = regm.wrapping_add(1);
-        self.regs.update_flags_from(n, Flag::S | Flag::Z | Flag::A | Flag::P);
-        regm
+    fn inr(&mut self, n: u8) -> u8 {
+        let r = n.wrapping_add(1);
+        // self.regs.set_flag(Flag::S, (r & 0x80) == 7);
+        self.regs.set_flag(Flag::S, (r & 0x80) == 0x80);
+        self.regs.set_flag(Flag::Z, r == 0x00);
+        self.regs.set_flag(Flag::A, (n & 0x0f) + 1 > 0x0f);
+        self.regs.set_flag(Flag::P, r.count_ones() & 0x01 == 0x00);
+        // self.regs.update_flags_from(n, Flag::S | Flag::Z | Flag::A | Flag::P);
+        r
     }
 
-    fn dcr(&mut self, mut regm: u8) -> u8 {
-        let mut n: usize = regm as usize;
-        n = n.wrapping_sub(1);
-        regm = regm.wrapping_sub(1);
-        self.regs.update_flags_from(n, Flag::S | Flag::Z | Flag::A | Flag::P);
-        regm
+    fn dcr(&mut self, n: u8) -> u8 {
+        let r = n.wrapping_sub(1);
+        // self.regs.set_flag(Flag::S, (r & 0x80) == 7);
+        self.regs.set_flag(Flag::S, (r & 0x80) == 0x80);
+        self.regs.set_flag(Flag::Z, r == 0x00);
+        self.regs.set_flag(Flag::A, (r & 0x0f) != 0x0f);
+        self.regs.set_flag(Flag::P, r.count_ones() & 0x01 == 0x00);
+        // self.regs.update_flags_from(n, Flag::S | Flag::Z | Flag::A | Flag::P);
+        r
     }
 
-    fn add(&mut self, mut regm1: u8, regm2: u8) -> u8 {
-        let mut n1: usize = regm1 as usize;
-        let n2: usize = regm2 as usize;
-        n1 = n1.wrapping_add(n2);
-        regm1 = regm1.wrapping_add(regm2);
-        self.regs.update_flags_from(n1, Flag::S | Flag::Z | Flag::A | Flag::P | Flag::C);
-        regm1
+    fn add(&mut self, regm1: u8, regm2: u8) -> u8 {
+        let n = regm1.wrapping_add(regm2);
+        self.regs.set_flag(Flag::S, (n & 0x80) == 0x80);
+        self.regs.set_flag(Flag::Z, n == 0x00);
+        self.regs.set_flag(Flag::A, (regm1 & 0x0f) + (regm2 & 0x0f) > 0x0f);
+        self.regs.set_flag(Flag::P, n.count_ones() & 0x01 == 0x00);
+        self.regs.set_flag(Flag::C, u16::from(regm1) + u16::from(regm2) > 0xff);
+        // self.regs.update_flags_from(n1, Flag::S | Flag::Z | Flag::A | Flag::P | Flag::C);
+        n
     }
 
-    fn adc(&mut self, mut regm1: u8, regm2: u8) -> u8 {
-        let mut n1: usize = regm1 as usize;
-        let n2: usize = regm2 as usize;
-        let carry: u8 = if self.regs.get_flag(Flag::C) { 1 } else { 0 };
+    fn adc(&mut self, regm1: u8, regm2: u8) -> u8 {
+        let carry = if self.regs.get_flag(Flag::C) { 1 } else { 0 };
 
-        n1 = n1.wrapping_add(n2).wrapping_add(carry as usize);
-        regm1 = regm1.wrapping_add(regm2).wrapping_add(carry);
-        self.regs.update_flags_from(n1, Flag::S | Flag::Z | Flag::A | Flag::P | Flag::C);
-        regm1
+        let n = regm1.wrapping_add(regm2).wrapping_add(carry);
+        self.regs.set_flag(Flag::S, (n & 0x80) == 0x80);
+        self.regs.set_flag(Flag::Z, n == 0x00);
+        self.regs.set_flag(Flag::A, (regm1 & 0x0f) + (regm2 & 0x0f) + carry > 0x0f);
+        self.regs.set_flag(Flag::P, n.count_ones() & 0x01 == 0x00);
+        self.regs.set_flag(Flag::C, u16::from(regm1) + u16::from(regm2) + u16::from(carry) > 0xff);
+        // self.regs.update_flags_from(n1, Flag::S | Flag::Z | Flag::A | Flag::P | Flag::C);
+        n
     }
 
-    fn sub(&mut self, mut regm1: u8, regm2: u8) -> u8 {
-        let mut n1: usize = regm1 as usize;
-        let n2: usize = regm2 as usize;
-        n1 = n1.wrapping_sub(n2);
-        regm1 = regm1.wrapping_sub(regm2);
-        self.regs.update_flags_from(n1, Flag::S | Flag::Z | Flag::A | Flag::P | Flag::C);
-        regm1
+    fn sub(&mut self, regm1: u8, regm2: u8) -> u8 {
+        let n = regm1.wrapping_sub(regm2);
+        self.regs.set_flag(Flag::S, (n & 0x80) == 0x80);
+        self.regs.set_flag(Flag::Z, n == 0x00);
+        self.regs.set_flag(Flag::A, (regm1 as i8 & 0x0f) - (regm2 as i8 & 0x0f) >= 0x00);
+        self.regs.set_flag(Flag::P, n.count_ones() & 0x01 == 0x00);
+        self.regs.set_flag(Flag::C, u16::from(regm1) < u16::from(regm2));
+        // self.regs.update_flags_from(n1, Flag::S | Flag::Z | Flag::A | Flag::P | Flag::C);
+        n
     }
 
-    fn sbb(&mut self, mut regm1: u8, regm2: u8) -> u8 {
-        let mut n1: usize = regm1 as usize;
-        let n2: usize = regm2 as usize;
-        let carry: u8 = if self.regs.get_flag(Flag::C) { 1 } else { 0 };
+    fn sbb(&mut self, regm1: u8, regm2: u8) -> u8 {
+        let carry = if self.regs.get_flag(Flag::C) { 1 } else { 0 };
 
-        n1 = n1.wrapping_sub(n2).wrapping_sub(carry as usize);
-        regm1 = regm1.wrapping_sub(regm2).wrapping_sub(carry);
-        self.regs.update_flags_from(n1, Flag::S | Flag::Z | Flag::A | Flag::P | Flag::C);
-        regm1
+        let n = regm1.wrapping_sub(regm2).wrapping_sub(carry);
+        self.regs.set_flag(Flag::S, (n & 0x80) == 0x80);
+        self.regs.set_flag(Flag::Z, n == 0x00);
+        self.regs.set_flag(Flag::A, (regm1 as i8 & 0x0f) - (regm2 as i8 & 0x0f) - (carry as i8 & 0x0f) >= 0x00);
+        self.regs.set_flag(Flag::P, n.count_ones() & 0x01 == 0x00);
+        self.regs.set_flag(Flag::C, u16::from(regm1) < u16::from(regm2) + u16::from(carry));
+        // self.regs.update_flags_from(n1, Flag::S | Flag::Z | Flag::A | Flag::P | Flag::C);
+        n
     }
 
     // Bitwise instructions
-    fn ana(&mut self, mut regm1: u8, regm2: u8) -> u8 {
-        regm1 &= regm2;
-        self.regs.update_flags_from(regm1 as usize, Flag::S | Flag::Z | Flag::A | Flag::P | Flag::C);
-        regm1
+    fn ana(&mut self, regm1: u8, regm2: u8) -> u8 {
+        let n = regm1 & regm2;
+        self.regs.set_flag(Flag::S, (n & 0x80) == 0x80);
+        self.regs.set_flag(Flag::Z, n == 0x00);
+        self.regs.set_flag(Flag::A, ((regm1 | regm2) & 0x08) != 0);
+        self.regs.set_flag(Flag::P, n.count_ones() & 0x01 == 0x00);
+        self.regs.set_flag(Flag::C, false);
+        // self.regs.update_flags_from(regm1 as usize, Flag::S | Flag::Z | Flag::A | Flag::P | Flag::C);
+        n
     }
 
-    fn xra(&mut self, mut regm1: u8, regm2: u8) -> u8 {
-        regm1 ^= regm2;
-        self.regs.update_flags_from(regm1 as usize, Flag::S | Flag::Z | Flag::A | Flag::P | Flag::C);
-        regm1
+    fn xra(&mut self, regm1: u8, regm2: u8) -> u8 {
+        let n = regm1 ^ regm2;
+        self.regs.set_flag(Flag::S, (n & 0x80) == 0x80);
+        self.regs.set_flag(Flag::Z, n == 0x00);
+        self.regs.set_flag(Flag::A, false);
+        self.regs.set_flag(Flag::P, n.count_ones() & 0x01 == 0x00);
+        self.regs.set_flag(Flag::C, false);
+        // self.regs.update_flags_from(regm1 as usize, Flag::S | Flag::Z | Flag::A | Flag::P | Flag::C);
+        n
     }
 
-    fn ora(&mut self, mut regm1: u8, regm2: u8) -> u8 {
-        regm1 |= regm2;
-        self.regs.update_flags_from(regm1 as usize, Flag::S | Flag::Z | Flag::A | Flag::P | Flag::C);
-        regm1
+    fn ora(&mut self, regm1: u8, regm2: u8) -> u8 {
+        let n = regm1 | regm2;
+        self.regs.set_flag(Flag::S, (n & 0x80) == 0x80);
+        self.regs.set_flag(Flag::Z, n == 0x00);
+        self.regs.set_flag(Flag::A, false);
+        self.regs.set_flag(Flag::P, n.count_ones() & 0x01 == 0x00);
+        self.regs.set_flag(Flag::C, false);
+        // self.regs.update_flags_from(regm1 as usize, Flag::S | Flag::Z | Flag::A | Flag::P | Flag::C);
+        n
     }
 
     fn cmp(&mut self, regm1: u8, regm2: u8) {
-        let regm1: usize = regm1 as usize;
-        let regm2: usize = regm2 as usize;
-        let n: usize = regm1.wrapping_sub(regm2);
-        self.regs.update_flags_from(n, Flag::S | Flag::Z | Flag::A | Flag::P | Flag::C);
+        self.sub(regm1, regm2);
+        // let n = regm1.wrapping_sub(regm2);
+        // self.regs.update_flags_from(n, Flag::S | Flag::Z | Flag::A | Flag::P | Flag::C);
     }
+
     // Jump instructions
     fn jmp(&mut self, cond: bool) {
         if cond {
@@ -197,20 +226,18 @@ impl Device<Event> for CPU {
     fn fetch(&mut self) -> u8 {
         let op = self.memory.read(self.pc.into());
         let code = self.disassembler.disassemble(&self.memory, &self.pc, &op, &self.regs.get_hl());
-        println!("{}     pc: {:x}, sp: {:x}, a: {:x}, b: {:x}, c: {:x}, d: {:x}, e: {:x}, h: {:x}, l: {:x}, f: {:x}", 
-                 code,
-                 self.pc,
-                 self.sp,
-                 self.regs.a,
-                 self.regs.b,
-                 self.regs.c,
-                 self.regs.d,
-                 self.regs.e,
-                 self.regs.h,
-                 self.regs.l,
-                 self.regs.f);
-        // println!("pc: {:x}", self.pc);
-        // println!("op: {:x}", op);
+        // println!("{: <25}     pc: {:04x}, sp: {:04x}, a: {:02x}, b: {:02x}, c: {:02x}, d: {:02x}, e: {:02x}, h: {:02x}, l: {:02x}, f: {:02x}", 
+                 // code,
+                 // self.pc,
+                 // self.sp,
+                 // self.regs.a,
+                 // self.regs.b,
+                 // self.regs.c,
+                 // self.regs.d,
+                 // self.regs.e,
+                 // self.regs.h,
+                 // self.regs.l,
+                 // self.regs.f);
         self.pc = self.pc.wrapping_add(1);
         op
     }
@@ -443,31 +470,37 @@ impl Device<Event> for CPU {
 
             // RLC
             0x07 => {
-                let mut n: usize = self.regs.a.into();
-                n = n << 1;
-                self.regs.a = self.regs.a << 1;
-                self.regs.update_flags_from(n, Flag::C as u8);
+                let carry = (self.regs.a & 0x80) >> 7;
+                let n = (self.regs.a << 1) | carry;
+                self.regs.set_flag(Flag::C, carry == 1);
+                self.regs.a = n;
+
+                // self.regs.update_flags_from(n, Flag::C as u8);
                 Event::Normal(4)
             }
 
             // RRC
             0x0f => {
-                let lo = self.regs.a & 1;
-                self.regs.a = self.regs.a >> 1;
-                if lo == 1 {
-                    self.regs.set_flag(Flag::C, true);
-                }
+                let carry = self.regs.a & 0x01;
+                let n = if carry == 1 { 0x80 | (self.regs.a >> 1) } else { self.regs.a >> 1 };
+                self.regs.set_flag(Flag::C, carry == 1);
+                self.regs.a = n;
+
+                // let lo = self.regs.a & 1;
+                // self.regs.a = self.regs.a >> 1;
+                // if lo == 1 {
+                    // self.regs.set_flag(Flag::C, true);
+                // }
                 Event::Normal(4)
             }
 
             // RAL
             0x17 => {
-                let mut n: usize = self.regs.a.into();
-                let carry: u8 = if self.regs.get_flag(Flag::C) { 0x80 } else { 0 };
-                self.regs.a = self.regs.a << 1;
-                self.regs.a |= carry;
-                n = n << 1;
-                self.regs.update_flags_from(n, Flag::C as u8);
+                let carry = (self.regs.a & 0x80) >> 7;
+                let n = (self.regs.a << 1) | u8::from(self.regs.get_flag(Flag::C));
+                self.regs.set_flag(Flag::C, carry == 1);
+                self.regs.a = n;
+                // self.regs.update_flags_from(n, Flag::C as u8);
                 Event::Normal(4)
             }
 
@@ -477,15 +510,13 @@ impl Device<Event> for CPU {
                 let carry: u8 = if self.regs.get_flag(Flag::C) { 0x80 } else { 0 };
                 self.regs.a = self.regs.a >> 1;
                 self.regs.a |= carry;
-                if lo == 1 {
-                    self.regs.set_flag(Flag::C, true);
-                }
+                self.regs.set_flag(Flag::C, lo == 1);
                 Event::Normal(4)
             }
 
             // CMA
             0x2f => {
-                self.regs.a ^= self.regs.a;
+                self.regs.a = !self.regs.a;
                 Event::Normal(4)
             }
 
@@ -498,19 +529,23 @@ impl Device<Event> for CPU {
 
             // DAA FIXME: propably has errors
             0x27 => {
-                let lo: u8 = self.regs.a & 0x0f;
+                let hi = self.regs.a >> 4;
+                let lo = self.regs.a & 0x0f;
+                let mut res = 0;
+                let mut carry = self.regs.get_flag(Flag::C);
                 if lo > 9 || self.regs.get_flag(Flag::A) {
-                    self.regs.a = self.regs.a.wrapping_add(9);
-                    self.regs.update_flags_from(self.regs.a as usize, Flag::A as u8);
+                    res += 0x06;
+                    // self.regs.update_flags_from(self.regs.a as usize, Flag::A as u8);
                 }
 
-                let mut hi: usize = ((self.regs.a & 0xf0) >> 7).into();
-                if hi > 9 || self.regs.get_flag(Flag::C) {
-                    hi += 9;
-                    hi = hi << 8;
-                    self.regs.a = self.regs.a | (hi as u8);
-                    self.regs.update_flags_from(hi, Flag::C as u8);
+                // let mut hi: usize = ((self.regs.a & 0xf0) >> 7).into();
+                if hi > 9 || carry || (hi >= 9 && lo > 9) {
+                    res += 0x60;
+                    carry = true;
+                    // self.regs.update_flags_from(hi, Flag::C as u8);
                 }
+                self.regs.a = self.add(self.regs.a, res);
+                self.regs.set_flag(Flag::C, carry);
                 Event::Normal(4)
             }
 
@@ -519,27 +554,39 @@ impl Device<Event> for CPU {
 
             // DAD
             0x09 => { 
-                let n: usize = (self.regs.get_bc() + self.regs.get_hl()).into();
-                self.regs.set_bc(n as u16); 
-                self.regs.update_flags_from(n, Flag::C as u8);
+                let n = self.regs.get_hl().wrapping_add(self.regs.get_bc());
+                self.regs.set_flag(Flag::C, self.regs.get_hl() > 0xffff - self.regs.get_bc());
+                self.regs.set_hl(n); 
+                // self.regs.update_flags_from(n, Flag::C as u8);
                 Event::Normal(10) 
             }
             0x19 => { 
-                let n: usize = (self.regs.get_de() + self.regs.get_hl()).into();
-                self.regs.set_de(n as u16); 
-                self.regs.update_flags_from(n, Flag::C as u8);
+                let n = self.regs.get_hl().wrapping_add(self.regs.get_de());
+                self.regs.set_flag(Flag::C, self.regs.get_hl() > 0xffff - self.regs.get_de());
+                // self.regs.update_flags_from(n, Flag::C as u8);
+                self.regs.set_hl(n); 
                 Event::Normal(10) 
             }
             0x29 => { 
-                let n: usize = (self.regs.get_hl() + self.regs.get_hl()).into();
-                self.regs.set_hl(n as u16); 
-                self.regs.update_flags_from(n, Flag::C as u8);
+                // let n: usize = (self.regs.get_hl() + self.regs.get_hl()).into();
+                // self.regs.set_hl(n as u16); 
+                // self.regs.update_flags_from(n, Flag::C as u8);
+                // Event::Normal(10) 
+                let n = self.regs.get_hl().wrapping_add(self.regs.get_hl());
+                self.regs.set_flag(Flag::C, self.regs.get_hl() > 0xffff - self.regs.get_hl());
+                // self.regs.update_flags_from(n, Flag::C as u8);
+                self.regs.set_hl(n); 
                 Event::Normal(10) 
             }
             0x39 => { 
-                let n: usize = (self.sp as usize) + (self.regs.get_hl() as usize);
-                self.sp = n as u16;
-                self.regs.update_flags_from(n, Flag::C as u8);
+                // let n: usize = (self.sp as usize) + (self.regs.get_hl() as usize);
+                // self.sp = n as u16;
+                // self.regs.update_flags_from(n, Flag::C as u8);
+                // Event::Normal(10) 
+                let n = self.regs.get_hl().wrapping_add(self.sp);
+                self.regs.set_flag(Flag::C, self.regs.get_hl() > 0xffff - self.sp);
+                // self.regs.update_flags_from(n, Flag::C as u8);
+                self.regs.set_hl(n); 
                 Event::Normal(10) 
             }
 
@@ -676,7 +723,7 @@ impl Device<Event> for CPU {
             0x22 => {
                 let addr = self.memory.read16(self.pc.into());
                 self.pc = self.pc.wrapping_add(2);
-                self.memory.write(addr.into(), self.regs.h);
+                self.memory.write(addr.into(), self.regs.l);
                 self.memory.write((addr + 1).into(), self.regs.h);
                 Event::Normal(16)
             }
@@ -703,7 +750,9 @@ impl Device<Event> for CPU {
 
             // LHLD
             0x2a => {
-                let data = self.memory.read16(self.pc.into());
+                let addr = self.memory.read16(self.pc.into());
+                let data = self.memory.read16(addr.into());
+                self.pc = self.pc.wrapping_add(2);
                 self.regs.set_hl(data);
                 Event::Normal(16)
             }
@@ -711,6 +760,7 @@ impl Device<Event> for CPU {
             // LDA
             0x3a => {
                 let addr = self.memory.read16(self.pc.into());
+                self.pc = self.pc.wrapping_add(2);
                 self.regs.a = self.memory.read(addr.into());
                 Event::Normal(13)
             }
@@ -752,7 +802,7 @@ impl Device<Event> for CPU {
             // XTHL
             0xe3 => {
                 let data = self.memory.read16(self.sp.into());
-                self.sp = self.regs.get_hl();
+                self.memory.write16(self.sp.into(), self.regs.get_hl());
                 self.regs.set_hl(data);
                 Event::Normal(18)
             }
@@ -842,7 +892,7 @@ impl Device<Event> for CPU {
 
             // IN
             0xdb => { 
-                let data = self.memory.read(self.pc.into());
+                let _data = self.memory.read(self.pc.into());
                 self.pc = self.pc.wrapping_add(1);
                 // println!("Read byte from input device: {}", data);
                 Event::Normal(10)

@@ -46,7 +46,7 @@ impl Disassembler {
                 let imm8 = memory.read((pc + 1).into());
                 format!("{:x}    {} $(0x{:x}), 0x{:x}", pc, n, rp, imm8)
             }
-            n => panic!("Could not disassemble: {:#?}", n),
+            _ => panic!("Could not disassemble: {:x}", op),
         }
     }
     pub fn new() -> Self {
@@ -207,6 +207,7 @@ impl Disassembler {
             (0x45, Opcode::SingleOpcode("MOV B, L")),
             (0x55, Opcode::SingleOpcode("MOV D, L")),
             (0x65, Opcode::SingleOpcode("MOV H, L")),
+            (0x75, Opcode::RegPairFirstOperand("MOV", "L")),
 
             (0x46, Opcode::RegPairSecOperand("MOV C")),
             (0x56, Opcode::RegPairSecOperand("MOV E")),
