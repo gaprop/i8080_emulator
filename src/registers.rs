@@ -97,24 +97,6 @@ impl Registers {
             self.f &= (1 << f) ^ 0xff
         }
     }
-
-    pub fn update_flags_from(&mut self, v: usize, f: u8) {
-        if Flag::is_flag(f, Flag::S) {
-            self.set_flag(Flag::S, v & 0xf0 == 0xf0);
-        }
-        if Flag::is_flag(f, Flag::Z) {
-            self.set_flag(Flag::Z, v == 0);
-        } 
-        if Flag::is_flag(f, Flag::A) {
-            self.set_flag(Flag::A, v > 0x0f);
-        }
-        if Flag::is_flag(f, Flag::P) {
-            self.set_flag(Flag::P, v.count_ones() & 1 == 0);
-        }
-        if Flag::is_flag(f, Flag::C) {
-            self.set_flag(Flag::C, v > 0xf0);
-        }
-    }
 }
 
 impl Registers {
@@ -175,14 +157,6 @@ mod tests {
         regs.set_flag(Flag::S, true);
         regs.set_flag(Flag::P, false);
         assert_eq!(regs.f, 0b1000_0010);
-    }
-
-    #[test]
-    fn update_flags_from() {
-        let mut regs = Registers::new();
-        let v: usize = 0x122;
-        regs.update_flags_from(v, Flag::C | Flag::A);
-        assert_eq!(regs.f, 0b0001_0011);
     }
 
     #[test]

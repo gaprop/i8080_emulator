@@ -63,23 +63,19 @@ impl CPU {
     // Arithmetic instructions
     fn inr(&mut self, n: u8) -> u8 {
         let r = n.wrapping_add(1);
-        // self.regs.set_flag(Flag::S, (r & 0x80) == 7);
         self.regs.set_flag(Flag::S, (r & 0x80) == 0x80);
         self.regs.set_flag(Flag::Z, r == 0x00);
         self.regs.set_flag(Flag::A, (n & 0x0f) + 1 > 0x0f);
         self.regs.set_flag(Flag::P, r.count_ones() & 0x01 == 0x00);
-        // self.regs.update_flags_from(n, Flag::S | Flag::Z | Flag::A | Flag::P);
         r
     }
 
     fn dcr(&mut self, n: u8) -> u8 {
         let r = n.wrapping_sub(1);
-        // self.regs.set_flag(Flag::S, (r & 0x80) == 7);
         self.regs.set_flag(Flag::S, (r & 0x80) == 0x80);
         self.regs.set_flag(Flag::Z, r == 0x00);
         self.regs.set_flag(Flag::A, (r & 0x0f) != 0x0f);
         self.regs.set_flag(Flag::P, r.count_ones() & 0x01 == 0x00);
-        // self.regs.update_flags_from(n, Flag::S | Flag::Z | Flag::A | Flag::P);
         r
     }
 
@@ -90,7 +86,6 @@ impl CPU {
         self.regs.set_flag(Flag::A, (regm1 & 0x0f) + (regm2 & 0x0f) > 0x0f);
         self.regs.set_flag(Flag::P, n.count_ones() & 0x01 == 0x00);
         self.regs.set_flag(Flag::C, u16::from(regm1) + u16::from(regm2) > 0xff);
-        // self.regs.update_flags_from(n1, Flag::S | Flag::Z | Flag::A | Flag::P | Flag::C);
         n
     }
 
@@ -103,7 +98,6 @@ impl CPU {
         self.regs.set_flag(Flag::A, (regm1 & 0x0f) + (regm2 & 0x0f) + carry > 0x0f);
         self.regs.set_flag(Flag::P, n.count_ones() & 0x01 == 0x00);
         self.regs.set_flag(Flag::C, u16::from(regm1) + u16::from(regm2) + u16::from(carry) > 0xff);
-        // self.regs.update_flags_from(n1, Flag::S | Flag::Z | Flag::A | Flag::P | Flag::C);
         n
     }
 
@@ -114,7 +108,6 @@ impl CPU {
         self.regs.set_flag(Flag::A, (regm1 as i8 & 0x0f) - (regm2 as i8 & 0x0f) >= 0x00);
         self.regs.set_flag(Flag::P, n.count_ones() & 0x01 == 0x00);
         self.regs.set_flag(Flag::C, u16::from(regm1) < u16::from(regm2));
-        // self.regs.update_flags_from(n1, Flag::S | Flag::Z | Flag::A | Flag::P | Flag::C);
         n
     }
 
@@ -127,7 +120,6 @@ impl CPU {
         self.regs.set_flag(Flag::A, (regm1 as i8 & 0x0f) - (regm2 as i8 & 0x0f) - (carry as i8 & 0x0f) >= 0x00);
         self.regs.set_flag(Flag::P, n.count_ones() & 0x01 == 0x00);
         self.regs.set_flag(Flag::C, u16::from(regm1) < u16::from(regm2) + u16::from(carry));
-        // self.regs.update_flags_from(n1, Flag::S | Flag::Z | Flag::A | Flag::P | Flag::C);
         n
     }
 
@@ -139,7 +131,6 @@ impl CPU {
         self.regs.set_flag(Flag::A, ((regm1 | regm2) & 0x08) != 0);
         self.regs.set_flag(Flag::P, n.count_ones() & 0x01 == 0x00);
         self.regs.set_flag(Flag::C, false);
-        // self.regs.update_flags_from(regm1 as usize, Flag::S | Flag::Z | Flag::A | Flag::P | Flag::C);
         n
     }
 
@@ -150,7 +141,6 @@ impl CPU {
         self.regs.set_flag(Flag::A, false);
         self.regs.set_flag(Flag::P, n.count_ones() & 0x01 == 0x00);
         self.regs.set_flag(Flag::C, false);
-        // self.regs.update_flags_from(regm1 as usize, Flag::S | Flag::Z | Flag::A | Flag::P | Flag::C);
         n
     }
 
@@ -161,14 +151,11 @@ impl CPU {
         self.regs.set_flag(Flag::A, false);
         self.regs.set_flag(Flag::P, n.count_ones() & 0x01 == 0x00);
         self.regs.set_flag(Flag::C, false);
-        // self.regs.update_flags_from(regm1 as usize, Flag::S | Flag::Z | Flag::A | Flag::P | Flag::C);
         n
     }
 
     fn cmp(&mut self, regm1: u8, regm2: u8) {
         self.sub(regm1, regm2);
-        // let n = regm1.wrapping_sub(regm2);
-        // self.regs.update_flags_from(n, Flag::S | Flag::Z | Flag::A | Flag::P | Flag::C);
     }
 
     // Jump instructions
@@ -225,7 +212,7 @@ impl CPU {
 impl Device<Event> for CPU {
     fn fetch(&mut self) -> u8 {
         let op = self.memory.read(self.pc.into());
-        let code = self.disassembler.disassemble(&self.memory, &self.pc, &op, &self.regs.get_hl());
+        // let code = self.disassembler.disassemble(&self.memory, &self.pc, &op, &self.regs.get_hl());
         // println!("{: <25}     pc: {:04x}, sp: {:04x}, a: {:02x}, b: {:02x}, c: {:02x}, d: {:02x}, e: {:02x}, h: {:02x}, l: {:02x}, f: {:02x}", 
                  // code,
                  // self.pc,
@@ -475,7 +462,6 @@ impl Device<Event> for CPU {
                 self.regs.set_flag(Flag::C, carry == 1);
                 self.regs.a = n;
 
-                // self.regs.update_flags_from(n, Flag::C as u8);
                 Event::Normal(4)
             }
 
@@ -486,11 +472,6 @@ impl Device<Event> for CPU {
                 self.regs.set_flag(Flag::C, carry == 1);
                 self.regs.a = n;
 
-                // let lo = self.regs.a & 1;
-                // self.regs.a = self.regs.a >> 1;
-                // if lo == 1 {
-                    // self.regs.set_flag(Flag::C, true);
-                // }
                 Event::Normal(4)
             }
 
@@ -500,7 +481,6 @@ impl Device<Event> for CPU {
                 let n = (self.regs.a << 1) | u8::from(self.regs.get_flag(Flag::C));
                 self.regs.set_flag(Flag::C, carry == 1);
                 self.regs.a = n;
-                // self.regs.update_flags_from(n, Flag::C as u8);
                 Event::Normal(4)
             }
 
@@ -527,7 +507,7 @@ impl Device<Event> for CPU {
                 Event::Normal(4)
             }
 
-            // DAA FIXME: propably has errors
+            // DAA
             0x27 => {
                 let hi = self.regs.a >> 4;
                 let lo = self.regs.a & 0x0f;
@@ -535,14 +515,11 @@ impl Device<Event> for CPU {
                 let mut carry = self.regs.get_flag(Flag::C);
                 if lo > 9 || self.regs.get_flag(Flag::A) {
                     res += 0x06;
-                    // self.regs.update_flags_from(self.regs.a as usize, Flag::A as u8);
                 }
 
-                // let mut hi: usize = ((self.regs.a & 0xf0) >> 7).into();
                 if hi > 9 || carry || (hi >= 9 && lo > 9) {
                     res += 0x60;
                     carry = true;
-                    // self.regs.update_flags_from(hi, Flag::C as u8);
                 }
                 self.regs.a = self.add(self.regs.a, res);
                 self.regs.set_flag(Flag::C, carry);
@@ -557,35 +534,23 @@ impl Device<Event> for CPU {
                 let n = self.regs.get_hl().wrapping_add(self.regs.get_bc());
                 self.regs.set_flag(Flag::C, self.regs.get_hl() > 0xffff - self.regs.get_bc());
                 self.regs.set_hl(n); 
-                // self.regs.update_flags_from(n, Flag::C as u8);
                 Event::Normal(10) 
             }
             0x19 => { 
                 let n = self.regs.get_hl().wrapping_add(self.regs.get_de());
                 self.regs.set_flag(Flag::C, self.regs.get_hl() > 0xffff - self.regs.get_de());
-                // self.regs.update_flags_from(n, Flag::C as u8);
                 self.regs.set_hl(n); 
                 Event::Normal(10) 
             }
             0x29 => { 
-                // let n: usize = (self.regs.get_hl() + self.regs.get_hl()).into();
-                // self.regs.set_hl(n as u16); 
-                // self.regs.update_flags_from(n, Flag::C as u8);
-                // Event::Normal(10) 
                 let n = self.regs.get_hl().wrapping_add(self.regs.get_hl());
                 self.regs.set_flag(Flag::C, self.regs.get_hl() > 0xffff - self.regs.get_hl());
-                // self.regs.update_flags_from(n, Flag::C as u8);
                 self.regs.set_hl(n); 
                 Event::Normal(10) 
             }
             0x39 => { 
-                // let n: usize = (self.sp as usize) + (self.regs.get_hl() as usize);
-                // self.sp = n as u16;
-                // self.regs.update_flags_from(n, Flag::C as u8);
-                // Event::Normal(10) 
                 let n = self.regs.get_hl().wrapping_add(self.sp);
                 self.regs.set_flag(Flag::C, self.regs.get_hl() > 0xffff - self.sp);
-                // self.regs.update_flags_from(n, Flag::C as u8);
                 self.regs.set_hl(n); 
                 Event::Normal(10) 
             }

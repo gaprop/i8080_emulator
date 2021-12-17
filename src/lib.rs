@@ -12,11 +12,3 @@ pub trait Machine<T> {
 
      fn add_device(&mut self, port: usize, device: Box<dyn Device<T>>);
 }
-
-#[cfg(test)]
-mod tests {
-    #[test]
-    fn it_works() {
-        assert_eq!(2 + 2, 4);
-    }
-}
