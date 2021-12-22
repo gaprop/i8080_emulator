@@ -44,6 +44,16 @@ impl CPU {
         }
     }
 
+    pub fn inte_handle(&mut self, addr: u16) -> Option<Event> {
+        if self.inte {
+            self.inte = false;
+            self.push(self.pc);
+            self.pc = addr;
+            return Some(Event::Normal(17));
+        }
+        None
+    }
+
     fn get_m(&self) -> u8 {
         self.memory.read(self.regs.get_hl().into())
     }
