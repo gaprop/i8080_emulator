@@ -17,7 +17,7 @@ pub struct CPU {
     pub memory: Memory8080,
     pub pc: u16,
     sp: u16,
-    inte: bool,
+    inter: bool,
     disassembler: Disassembler,
 }
 
@@ -28,7 +28,7 @@ impl CPU {
             memory: Memory8080::new_empty(),
             pc: 0,
             sp: 0x0000, // 0xf000,
-            inte: false,
+            inter: false,
             disassembler: Disassembler::new(),
         }
     }
@@ -39,14 +39,14 @@ impl CPU {
             memory: Memory8080::new(memory),
             pc: 0,
             sp: 0x0000, // 0xf000,
-            inte: false,
+            inter: false,
             disassembler: Disassembler::new(),
         }
     }
 
-    pub fn inte_handle(&mut self, addr: u16) -> Option<Event> {
-        if self.inte {
-            self.inte = false;
+    pub fn inter_handle(&mut self, addr: u16) -> Option<Event> {
+        if self.inter {
+            self.inter = false;
             self.push(self.pc);
             self.pc = addr;
             return Some(Event::Normal(17));
@@ -861,9 +861,9 @@ impl Device<Event> for CPU {
             0xf1 => { let data = self.pop(); self.regs.set_af(data); Event::Normal(10) }
 
             // EI
-            0xfb => { self.inte = true; Event::Normal(4) }
+            0xfb => { self.inter = true; Event::Normal(4) }
             // DI
-            0xf3 => { self.inte = false; Event::Normal(4) }
+            0xf3 => { self.inter = false; Event::Normal(4) }
 
             // IN
             0xdb => { 
