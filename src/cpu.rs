@@ -3,7 +3,7 @@ use crate::registers::{Registers, Flag};
 use crate::device::Device;
 use crate::disassembler::{Disassembler};
 
-type ClockCycles = u8;
+type ClockCycles = u32;
 type Port = u8;
 
 pub enum Event {
