@@ -1,8 +1,10 @@
 use i8080_emulator::cpu::{Event, CPU};
-use i8080_emulator::memory::{Memory};
+use i8080_emulator::memory::{Memory, Memory8080};
 use i8080_emulator::device::Device;
 use i8080_emulator::{Machine};
 
+use std::cell::RefCell;
+use std::rc::Rc;
 use std::fs::File;
 use std::io::Read;
 use std::path::Path;
@@ -10,16 +12,19 @@ use std::env;
 
 struct Machine8080Test {
     cpu: CPU,
+    memory: Rc<RefCell<Memory8080>>,
     devices: Vec<Box<dyn Device<Event>>>,
     test_finished: bool,
 }
 
 impl Machine8080Test {
     pub fn new(memory: [u8; 65536]) -> Self {
-        let mut cpu = CPU::new(memory);
+        let memory = Rc::new(RefCell::new(Memory8080::new(memory)));
+        let mut cpu = CPU::new(Rc::clone(&memory));
         cpu.pc = 0x100;
         Machine8080Test {
             cpu,
+            memory,
             devices: vec![],
             test_finished: false,
         }
@@ -43,8 +48,8 @@ impl Machine<Event> for Machine8080Test {
                 print!("{}", (self.cpu.regs.e) as char);
             } else if operation == 9 {
                 let mut addr = self.cpu.regs.get_de();
-                while (self.cpu.memory.read(addr.into()) as char) != '$' {
-                    print!("{}", self.cpu.memory.read(addr.into()) as char);
+                while (self.memory.borrow().read(addr.into()) as char) != '$' {
+                    print!("{}", self.memory.borrow().read(addr.into()) as char);
                     addr += 1;
                 }
             }

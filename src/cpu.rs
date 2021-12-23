@@ -3,6 +3,9 @@ use crate::registers::{Registers, Flag};
 use crate::device::Device;
 use crate::disassembler::{Disassembler};
 
+use std::cell::RefCell;
+use std::rc::Rc;
+
 type ClockCycles = u32;
 type Port = u8;
 
@@ -14,7 +17,7 @@ pub enum Event {
 
 pub struct CPU {
     pub regs: Registers,
-    pub memory: Memory8080,
+    pub memory: Rc<RefCell<Memory8080>>,
     pub pc: u16,
     sp: u16,
     inter: bool,
@@ -22,21 +25,21 @@ pub struct CPU {
 }
 
 impl CPU {
-    pub fn new_empty() -> Self {
-        CPU {
-            regs: Registers::new(),
-            memory: Memory8080::new_empty(),
-            pc: 0,
-            sp: 0x0000, // 0xf000,
-            inter: false,
-            disassembler: Disassembler::new(),
-        }
-    }
+    // pub fn new_empty() -> Self {
+        // CPU {
+            // regs: Registers::new(),
+            // memory: Memory8080::new_empty(),
+            // pc: 0,
+            // sp: 0x0000, // 0xf000,
+            // inter: false,
+            // disassembler: Disassembler::new(),
+        // }
+    // }
 
-    pub fn new(memory: [u8; 0x10000]) -> Self {
+    pub fn new(memory: Rc<RefCell<Memory8080>>) -> Self {
         CPU {
             regs: Registers::new(),
-            memory: Memory8080::new(memory),
+            memory,
             pc: 0,
             sp: 0x0000, // 0xf000,
             inter: false,
@@ -55,11 +58,11 @@ impl CPU {
     }
 
     fn get_m(&self) -> u8 {
-        self.memory.read(self.regs.get_hl().into())
+        self.memory.borrow().read(self.regs.get_hl().into())
     }
 
     fn set_m(&mut self, data: u8) {
-        self.memory.write(self.regs.get_hl().into(), data);
+        self.memory.borrow_mut().write(self.regs.get_hl().into(), data);
     }
 
     //// Instruction functions
@@ -67,7 +70,7 @@ impl CPU {
     // Store instructions
     fn stax(&mut self, addr: u16) {
         let addr = addr as usize;
-        self.memory.write(addr, self.regs.a);
+        self.memory.borrow_mut().write(addr, self.regs.a);
     }
 
     // Arithmetic instructions
@@ -171,7 +174,7 @@ impl CPU {
     // Jump instructions
     fn jmp(&mut self, cond: bool) {
         if cond {
-            let addr = self.memory.read16(self.pc.into());
+            let addr = self.memory.borrow().read16(self.pc.into());
             self.pc = addr;
         } else {
             self.pc = self.pc.wrapping_add(2);
@@ -182,7 +185,7 @@ impl CPU {
         if cond {
             self.push(self.pc.wrapping_add(2));
 
-            let addr = self.memory.read16(self.pc.into());
+            let addr = self.memory.borrow().read16(self.pc.into());
             self.pc = addr;
             Event::Normal(17)
         } else {
@@ -203,17 +206,17 @@ impl CPU {
 
     fn push(&mut self, data: u16) {
         self.sp = self.sp.wrapping_sub(2);
-        self.memory.write16(self.sp.into(), data);
+        self.memory.borrow_mut().write16(self.sp.into(), data);
     }
 
     fn pop(&mut self) -> u16 {
-        let data = self.memory.read16(self.sp.into());
+        let data = self.memory.borrow().read16(self.sp.into());
         self.sp = self.sp.wrapping_add(2);
         data
     }
 
     fn rst(&mut self, addr: u16) {
-        self.memory.write16(self.sp.wrapping_add(2).into(),
+        self.memory.borrow_mut().write16(self.sp.wrapping_add(2).into(),
                             self.pc);
         self.pc = 0x0000 | addr;
     }
@@ -221,7 +224,7 @@ impl CPU {
 
 impl Device<Event> for CPU {
     fn fetch(&mut self) -> u8 {
-        let op = self.memory.read(self.pc.into());
+        let op = self.memory.borrow().read(self.pc.into());
         // let code = self.disassembler.disassemble(&self.memory, &self.pc, &op, &self.regs.get_hl());
         // println!("{: <25}     pc: {:04x}, sp: {:04x}, a: {:02x}, b: {:02x}, c: {:02x}, d: {:02x}, e: {:02x}, h: {:02x}, l: {:02x}, f: {:02x}", 
                  // code,
@@ -253,25 +256,25 @@ impl Device<Event> for CPU {
 
             // LXI
             0x01 => { 
-                let data = self.memory.read16(self.pc.into());
+                let data = self.memory.borrow().read16(self.pc.into());
                 self.pc += 2;
                 self.regs.set_bc(data);
                 Event::Normal(10)
             }
             0x11 => {
-                let data = self.memory.read16(self.pc.into());
+                let data = self.memory.borrow().read16(self.pc.into());
                 self.pc += 2;
                 self.regs.set_de(data);
                 Event::Normal(10)
             }
             0x21 => {
-                let data = self.memory.read16(self.pc.into());
+                let data = self.memory.borrow().read16(self.pc.into());
                 self.pc += 2;
                 self.regs.set_hl(data);
                 Event::Normal(10)
             }
             0x31 => {
-                let data = self.memory.read16(self.pc.into());
+                let data = self.memory.borrow().read16(self.pc.into());
                 self.pc += 2;
                 self.sp = data;
                 Event::Normal(10)
@@ -403,7 +406,7 @@ impl Device<Event> for CPU {
 
             // ADI
             0xc6 => { 
-                let data = self.memory.read(self.pc.into());
+                let data = self.memory.borrow().read(self.pc.into());
                 self.pc = self.pc.wrapping_add(1);
                 self.regs.a = self.add(self.regs.a, data);
                 Event::Normal(7)
@@ -411,7 +414,7 @@ impl Device<Event> for CPU {
 
             // ACI
             0xce => { 
-                let data = self.memory.read(self.pc.into());
+                let data = self.memory.borrow().read(self.pc.into());
                 self.pc = self.pc.wrapping_add(1);
                 self.regs.a = self.adc(self.regs.a, data);
                 Event::Normal(7)
@@ -419,7 +422,7 @@ impl Device<Event> for CPU {
 
             // SUI
             0xd6 => { 
-                let data = self.memory.read(self.pc.into());
+                let data = self.memory.borrow().read(self.pc.into());
                 self.pc = self.pc.wrapping_add(1);
                 self.regs.a = self.sub(self.regs.a, data);
                 Event::Normal(7)
@@ -427,7 +430,7 @@ impl Device<Event> for CPU {
 
             // SBI
             0xde => { 
-                let data = self.memory.read(self.pc.into());
+                let data = self.memory.borrow().read(self.pc.into());
                 self.pc = self.pc.wrapping_add(1);
                 self.regs.a = self.sbb(self.regs.a, data);
                 Event::Normal(7)
@@ -435,7 +438,7 @@ impl Device<Event> for CPU {
 
             // ANI
             0xe6 => {
-                let data = self.memory.read(self.pc.into());
+                let data = self.memory.borrow().read(self.pc.into());
                 self.pc = self.pc.wrapping_add(1);
                 self.regs.a = self.ana(self.regs.a, data);
                 Event::Normal(7)
@@ -443,7 +446,7 @@ impl Device<Event> for CPU {
 
             // XRI
             0xee => {
-                let data = self.memory.read(self.pc.into());
+                let data = self.memory.borrow().read(self.pc.into());
                 self.pc = self.pc.wrapping_add(1);
                 self.regs.a = self.xra(self.regs.a, data);
                 Event::Normal(7)
@@ -451,7 +454,7 @@ impl Device<Event> for CPU {
 
             // ORI
             0xf6 => {
-                let data = self.memory.read(self.pc.into());
+                let data = self.memory.borrow().read(self.pc.into());
                 self.pc = self.pc.wrapping_add(1);
                 self.regs.a = self.ora(self.regs.a, data);
                 Event::Normal(7)
@@ -459,7 +462,7 @@ impl Device<Event> for CPU {
 
             // CPI
             0xfe => {
-                let data = self.memory.read(self.pc.into());
+                let data = self.memory.borrow().read(self.pc.into());
                 self.pc = self.pc.wrapping_add(1);
                 self.cmp(self.regs.a, data);
                 Event::Normal(7)
@@ -646,49 +649,49 @@ impl Device<Event> for CPU {
 
             // MVI
             0x06 => {
-                let data = self.memory.read(self.pc.into());
+                let data = self.memory.borrow().read(self.pc.into());
                 self.pc = self.pc.wrapping_add(1);
                 self.regs.b = data;
                 Event::Normal(7)
             }
             0x0e => {
-                let data = self.memory.read(self.pc.into());
+                let data = self.memory.borrow().read(self.pc.into());
                 self.pc = self.pc.wrapping_add(1);
                 self.regs.c = data;
                 Event::Normal(7)
             }
             0x16 => {
-                let data = self.memory.read(self.pc.into());
+                let data = self.memory.borrow().read(self.pc.into());
                 self.pc = self.pc.wrapping_add(1);
                 self.regs.d = data;
                 Event::Normal(7)
             }
             0x1e => {
-                let data = self.memory.read(self.pc.into());
+                let data = self.memory.borrow().read(self.pc.into());
                 self.pc = self.pc.wrapping_add(1);
                 self.regs.e = data;
                 Event::Normal(7)
             }
             0x26 => {
-                let data = self.memory.read(self.pc.into());
+                let data = self.memory.borrow().read(self.pc.into());
                 self.pc = self.pc.wrapping_add(1);
                 self.regs.h = data;
                 Event::Normal(7)
             }
             0x2e => {
-                let data = self.memory.read(self.pc.into());
+                let data = self.memory.borrow().read(self.pc.into());
                 self.pc = self.pc.wrapping_add(1);
                 self.regs.l = data;
                 Event::Normal(7)
             }
             0x36 => {
-                let data = self.memory.read(self.pc.into());
+                let data = self.memory.borrow().read(self.pc.into());
                 self.pc = self.pc.wrapping_add(1);
                 self.set_m(data);
                 Event::Normal(10)
             }
             0x3e => {
-                let data = self.memory.read(self.pc.into());
+                let data = self.memory.borrow().read(self.pc.into());
                 self.pc = self.pc.wrapping_add(1);
                 self.regs.a = data;
                 Event::Normal(7)
@@ -696,37 +699,37 @@ impl Device<Event> for CPU {
 
             // SHLD
             0x22 => {
-                let addr = self.memory.read16(self.pc.into());
+                let addr = self.memory.borrow().read16(self.pc.into());
                 self.pc = self.pc.wrapping_add(2);
-                self.memory.write(addr.into(), self.regs.l);
-                self.memory.write((addr + 1).into(), self.regs.h);
+                self.memory.borrow_mut().write(addr.into(), self.regs.l);
+                self.memory.borrow_mut().write((addr + 1).into(), self.regs.h);
                 Event::Normal(16)
             }
 
             // STA
             0x32 => {
-                let addr = self.memory.read16(self.pc.into());
+                let addr = self.memory.borrow().read16(self.pc.into());
                 self.pc = self.pc.wrapping_add(2);
-                self.memory.write(addr.into(), self.regs.a);
+                self.memory.borrow_mut().write(addr.into(), self.regs.a);
                 Event::Normal(13)
             }
 
             // LDAX
             0x0a => {
                 let addr = self.regs.get_bc();
-                self.regs.a = self.memory.read(addr.into());
+                self.regs.a = self.memory.borrow().read(addr.into());
                 Event::Normal(7)
             }
             0x1a => {
                 let addr = self.regs.get_de();
-                self.regs.a = self.memory.read(addr.into());
+                self.regs.a = self.memory.borrow().read(addr.into());
                 Event::Normal(7)
             }
 
             // LHLD
             0x2a => {
-                let addr = self.memory.read16(self.pc.into());
-                let data = self.memory.read16(addr.into());
+                let addr = self.memory.borrow().read16(self.pc.into());
+                let data = self.memory.borrow().read16(addr.into());
                 self.pc = self.pc.wrapping_add(2);
                 self.regs.set_hl(data);
                 Event::Normal(16)
@@ -734,9 +737,9 @@ impl Device<Event> for CPU {
 
             // LDA
             0x3a => {
-                let addr = self.memory.read16(self.pc.into());
+                let addr = self.memory.borrow().read16(self.pc.into());
                 self.pc = self.pc.wrapping_add(2);
-                self.regs.a = self.memory.read(addr.into());
+                self.regs.a = self.memory.borrow().read(addr.into());
                 Event::Normal(13)
             }
 
@@ -776,8 +779,8 @@ impl Device<Event> for CPU {
 
             // XTHL
             0xe3 => {
-                let data = self.memory.read16(self.sp.into());
-                self.memory.write16(self.sp.into(), self.regs.get_hl());
+                let data = self.memory.borrow().read16(self.sp.into());
+                self.memory.borrow_mut().write16(self.sp.into(), self.regs.get_hl());
                 self.regs.set_hl(data);
                 Event::Normal(18)
             }
@@ -867,7 +870,7 @@ impl Device<Event> for CPU {
 
             // IN
             0xdb => { 
-                let _data = self.memory.read(self.pc.into());
+                let _data = self.memory.borrow().read(self.pc.into());
                 self.pc = self.pc.wrapping_add(1);
                 // println!("Read byte from input device: {}", data);
                 Event::Normal(10)
@@ -875,7 +878,7 @@ impl Device<Event> for CPU {
 
             // OUT
             0xd3 => {
-                let port = self.memory.read(self.pc.into());
+                let port = self.memory.borrow().read(self.pc.into());
                 self.pc = self.pc.wrapping_add(1);
                 // println!("Send byte to input device: {}", port);
                 Event::Output(port, self.regs.a, 10)
