@@ -25,17 +25,6 @@ pub struct CPU {
 }
 
 impl CPU {
-    // pub fn new_empty() -> Self {
-        // CPU {
-            // regs: Registers::new(),
-            // memory: Memory8080::new_empty(),
-            // pc: 0,
-            // sp: 0x0000, // 0xf000,
-            // inter: false,
-            // disassembler: Disassembler::new(),
-        // }
-    // }
-
     pub fn new(memory: Rc<RefCell<Memory8080>>) -> Self {
         CPU {
             regs: Registers::new(),

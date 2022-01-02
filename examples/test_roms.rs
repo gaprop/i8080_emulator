@@ -1,4 +1,4 @@
-use i8080_emulator::cpu::{Event, CPU};
+use i8080_emulator::cpu::CPU;
 use i8080_emulator::memory::{Memory, Memory8080};
 use i8080_emulator::device::Device;
 use i8080_emulator::{Machine};
@@ -13,7 +13,6 @@ use std::env;
 struct Machine8080Test {
     cpu: CPU,
     memory: Rc<RefCell<Memory8080>>,
-    devices: Vec<Box<dyn Device<Event>>>,
     test_finished: bool,
 }
 
@@ -25,18 +24,13 @@ impl Machine8080Test {
         Machine8080Test {
             cpu,
             memory,
-            devices: vec![],
             test_finished: false,
         }
     }
 
 }
 
-impl Machine<Event> for Machine8080Test {
-    fn add_device(&mut self, port: usize, device: Box<dyn Device<Event>>) {
-        self.devices.insert(port, device);
-    }
-
+impl Machine for Machine8080Test {
     fn next(&mut self) {
         let op = self.cpu.fetch();
         self.cpu.exec(op);
