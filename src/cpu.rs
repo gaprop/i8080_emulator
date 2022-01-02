@@ -11,6 +11,7 @@ type Port = u8;
 
 pub enum Event {
     Output(Port, u8, ClockCycles),
+    Input(Port, ClockCycles),
     Halt(ClockCycles),
     Normal(ClockCycles),
 }
@@ -859,10 +860,10 @@ impl Device<Event> for CPU {
 
             // IN
             0xdb => { 
-                let _data = self.memory.borrow().read(self.pc.into());
+                let port = self.memory.borrow().read(self.pc.into());
                 self.pc = self.pc.wrapping_add(1);
                 // println!("Read byte from input device: {}", data);
-                Event::Normal(10)
+                Event::Input(port, 10)
             }
 
             // OUT
